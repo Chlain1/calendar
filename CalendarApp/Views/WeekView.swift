@@ -1,0 +1,370 @@
+import SwiftUI
+import SwiftData
+
+// MARK: - Layout helpers
+
+struct EventLayout: Identifiable {
+    let id: UUID
+    let event: CalendarEvent
+    let column: Int
+    let totalColumns: Int
+}
+
+func layoutEvents(_ events: [CalendarEvent]) -> [EventLayout] {
+    let sorted = events.sorted { $0.startDate < $1.startDate }
+    var layouts: [EventLayout] = []
+    var columns: [[CalendarEvent]] = [] // active column queues
+
+    for event in sorted {
+        var placed = false
+        for col in 0..<columns.count {
+            if let last = columns[col].last, last.endDate <= event.startDate {
+                columns[col].append(event)
+                placed = true
+                break
+            }
+        }
+        if !placed {
+            columns.append([event])
+        }
+    }
+
+    // Determine group width (max overlapping count in time slice)
+    for (col, colEvents) in columns.enumerated() {
+        for event in colEvents {
+            // Count how many columns overlap with this event's time
+            let overlapping = columns.filter { colQ in
+                colQ.contains { $0.startDate < event.endDate && $0.endDate > event.startDate }
+            }.count
+            layouts.append(EventLayout(id: event.id, event: event, column: col, totalColumns: overlapping))
+        }
+    }
+    return layouts
+}
+
+// MARK: - Main WeekView
+
+struct WeekView: View {
+    @Environment(\.modelContext) private var modelContext
+    @Query(filter: #Predicate<CalendarEvent> { !$0.isDeleted }) private var allEvents: [CalendarEvent]
+    @Environment(SyncManager.self) private var syncManager
+    @State private var viewModel = CalendarViewModel()
+    @State private var scrollProxy: ScrollViewProxy?
+
+    let hourHeight: CGFloat = 60
+    let timeColumnWidth: CGFloat = 52
+    let allDayRowHeight: CGFloat = 28
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 0) {
+                weekNavigationHeader
+                Divider()
+                dayHeaderRow
+                allDayRow
+                Divider()
+                timeGrid
+            }
+            .navigationBarHidden(true)
+            .sheet(isPresented: $viewModel.showingAddEvent) {
+                AddEditEventView(startDate: viewModel.newEventStartDate, modelContext: modelContext)
+            }
+            .sheet(isPresented: $viewModel.showingEventDetail) {
+                if let event = viewModel.selectedEvent {
+                    EventDetailView(event: event, modelContext: modelContext)
+                }
+            }
+            .toolbar(.hidden, for: .navigationBar)
+        }
+    }
+
+    // MARK: - Header
+
+    private var weekNavigationHeader: some View {
+        HStack {
+            Button(action: { viewModel.goToPreviousWeek() }) {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 17, weight: .semibold))
+            }
+
+            Spacer()
+
+            VStack(spacing: 2) {
+                Text(viewModel.weekTitle)
+                    .font(.headline)
+                Text("Week \(viewModel.weekNumber)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            Button(action: { viewModel.goToNextWeek() }) {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 17, weight: .semibold))
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .overlay(alignment: .trailing) {
+            HStack {
+                if syncManager.isSyncing {
+                    ProgressView().scaleEffect(0.8)
+                }
+                if !viewModel.isCurrentWeek {
+                    Button("Today") { viewModel.goToToday() }
+                        .font(.subheadline)
+                        .foregroundStyle(.accent)
+                }
+            }
+            .padding(.trailing, 16)
+        }
+    }
+
+    // MARK: - Day headers
+
+    private var dayHeaderRow: some View {
+        HStack(spacing: 0) {
+            Color.clear.frame(width: timeColumnWidth)
+
+            ForEach(viewModel.weekDays, id: \.self) { day in
+                VStack(spacing: 2) {
+                    Text(viewModel.dayLabel(for: day))
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.secondary)
+
+                    ZStack {
+                        if viewModel.isToday(day) {
+                            Circle()
+                                .fill(Color.accentColor)
+                                .frame(width: 30, height: 30)
+                        }
+                        Text(viewModel.dayNumber(for: day))
+                            .font(.system(size: 17, weight: viewModel.isToday(day) ? .semibold : .regular))
+                            .foregroundStyle(viewModel.isToday(day) ? .white : .primary)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 6)
+            }
+        }
+        .background(Color(.systemBackground))
+    }
+
+    // MARK: - All-day row
+
+    private var allDayRow: some View {
+        HStack(spacing: 0) {
+            Text("All-day")
+                .font(.system(size: 10))
+                .foregroundStyle(.secondary)
+                .frame(width: timeColumnWidth)
+
+            ForEach(viewModel.weekDays, id: \.self) { day in
+                let dayEvents = viewModel.allDayEvents(for: day, from: allEvents)
+                VStack(spacing: 2) {
+                    ForEach(dayEvents) { event in
+                        Text(event.title)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(.white)
+                            .lineLimit(1)
+                            .padding(.horizontal, 4)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(event.color.opacity(0.85))
+                            .clipShape(RoundedRectangle(cornerRadius: 3))
+                    }
+                    if dayEvents.count < 2 {
+                        Spacer()
+                    }
+                }
+                .frame(maxWidth: .infinity, minHeight: allDayRowHeight)
+                .padding(.horizontal, 1)
+            }
+        }
+        .frame(minHeight: allDayRowHeight)
+        .padding(.vertical, 2)
+    }
+
+    // MARK: - Time grid
+
+    private var timeGrid: some View {
+        ScrollViewReader { proxy in
+            ScrollView(.vertical, showsIndicators: false) {
+                ZStack(alignment: .topLeading) {
+                    // Background hour lines
+                    hourLines
+
+                    // Events layer
+                    HStack(spacing: 0) {
+                        Color.clear.frame(width: timeColumnWidth)
+                        ForEach(viewModel.weekDays, id: \.self) { day in
+                            dayEventsColumn(for: day)
+                        }
+                    }
+
+                    // Current time indicator
+                    currentTimeIndicator
+                }
+                .frame(height: hourHeight * 24)
+                .id("timeGrid")
+            }
+            .onAppear {
+                scrollProxy = proxy
+                scrollToCurrentTime(proxy: proxy)
+            }
+        }
+    }
+
+    private var hourLines: some View {
+        VStack(spacing: 0) {
+            ForEach(0..<24, id: \.self) { hour in
+                HStack(alignment: .top, spacing: 0) {
+                    Text(hourLabel(hour))
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .frame(width: timeColumnWidth, alignment: .trailing)
+                        .padding(.trailing, 6)
+                        .offset(y: -7)
+
+                    Rectangle()
+                        .fill(Color(.separator))
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 0.5)
+                }
+                .frame(height: hourHeight, alignment: .top)
+                .id("hour_\(hour)")
+            }
+        }
+    }
+
+    private func dayEventsColumn(for date: Date) -> some View {
+        let dayEvents = viewModel.events(for: date, from: allEvents)
+        let layouts = layoutEvents(dayEvents)
+
+        return GeometryReader { geo in
+            let colWidth = geo.size.width
+            ZStack(alignment: .topLeading) {
+                // Tap zones per hour
+                VStack(spacing: 0) {
+                    ForEach(0..<24, id: \.self) { hour in
+                        Color.clear
+                            .frame(maxWidth: .infinity)
+                            .frame(height: hourHeight)
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                viewModel.tapOnTimeSlot(date: date, hour: hour)
+                            }
+                    }
+                }
+
+                // Event blocks
+                ForEach(layouts) { layout in
+                    let event = layout.event
+                    let top = yOffset(for: event.startDate)
+                    let height = max(eventHeight(for: event), 22)
+                    let width = colWidth / CGFloat(layout.totalColumns)
+                    let xOff = width * CGFloat(layout.column)
+
+                    EventBlockView(event: event) {
+                        viewModel.tapOnEvent(event)
+                    }
+                    .frame(width: width - 2, height: height)
+                    .offset(x: xOff + 1, y: top)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: hourHeight * 24)
+    }
+
+    private var currentTimeIndicator: some View {
+        let now = Date()
+        let cal = Calendar.current
+        let hour = cal.component(.hour, from: now)
+        let minute = cal.component(.minute, from: now)
+        let y = CGFloat(hour) * hourHeight + CGFloat(minute) / 60 * hourHeight
+
+        // Only show if current week contains today
+        guard viewModel.weekDays.contains(where: { Calendar.current.isDateInToday($0) }) else {
+            return AnyView(EmptyView())
+        }
+
+        return AnyView(
+            HStack(spacing: 0) {
+                Color.clear.frame(width: timeColumnWidth)
+                Rectangle()
+                    .fill(Color.red)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 2)
+            }
+            .offset(y: y - 1)
+        )
+    }
+
+    // MARK: - Helpers
+
+    private func yOffset(for date: Date) -> CGFloat {
+        let cal = Calendar.current
+        let h = cal.component(.hour, from: date)
+        let m = cal.component(.minute, from: date)
+        return CGFloat(h) * hourHeight + CGFloat(m) / 60 * hourHeight
+    }
+
+    private func eventHeight(for event: CalendarEvent) -> CGFloat {
+        let seconds = event.endDate.timeIntervalSince(event.startDate)
+        return CGFloat(seconds / 3600) * hourHeight
+    }
+
+    private func hourLabel(_ hour: Int) -> String {
+        hour == 0 ? "" : String(format: "%02d:00", hour)
+    }
+
+    private func scrollToCurrentTime(proxy: ScrollViewProxy? = nil) {
+        let hour = max(Calendar.current.component(.hour, from: Date()) - 1, 0)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            withAnimation(.easeInOut(duration: 0.3)) {
+                (proxy ?? scrollProxy)?.scrollTo("hour_\(hour)", anchor: .top)
+            }
+        }
+    }
+}
+
+// MARK: - Event block
+
+struct EventBlockView: View {
+    let event: CalendarEvent
+    let onTap: () -> Void
+
+    var body: some View {
+        Button(action: onTap) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(event.title)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .lineLimit(2)
+
+                if event.duration > 1800 {
+                    Text(timeRangeLabel)
+                        .font(.system(size: 10))
+                        .foregroundStyle(.white.opacity(0.85))
+                }
+            }
+            .padding(.horizontal, 5)
+            .padding(.vertical, 3)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .background(event.color)
+            .clipShape(RoundedRectangle(cornerRadius: 5))
+            .overlay(
+                RoundedRectangle(cornerRadius: 5)
+                    .strokeBorder(.white.opacity(0.15), lineWidth: 0.5)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var timeRangeLabel: String {
+        let fmt = DateFormatter()
+        fmt.dateFormat = "HH:mm"
+        return "\(fmt.string(from: event.startDate)) – \(fmt.string(from: event.endDate))"
+    }
+}

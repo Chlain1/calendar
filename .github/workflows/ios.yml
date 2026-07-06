@@ -1,0 +1,57 @@
+name: iOS CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build for iOS Simulator
+    runs-on: macos-15        # Xcode 16, iOS 18 simulators
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Xcode version
+        run: xcodebuild -version
+
+      - name: List available iOS simulators
+        run: |
+          xcrun simctl list devices available | grep -E "^-- |iPhone"
+
+      - name: Build
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project CalendarApp.xcodeproj \
+            -scheme CalendarApp \
+            -destination "platform=iOS Simulator,name=iPhone 16,OS=latest" \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tee /tmp/xcodebuild.log
+          echo "Exit code: $?"
+
+      - name: Analyze (static analysis)
+        run: |
+          set -o pipefail
+          xcodebuild analyze \
+            -project CalendarApp.xcodeproj \
+            -scheme CalendarApp \
+            -destination "platform=iOS Simulator,name=iPhone 16,OS=latest" \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            2>&1 | grep -E "error:|warning:|note:|Build succeeded|FAILED" || true
+
+      - name: Upload build log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: /tmp/xcodebuild.log
+          retention-days: 7
