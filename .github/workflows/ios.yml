@@ -9,8 +9,8 @@ on:
 
 jobs:
   build:
-    name: Build for iOS Simulator
-    runs-on: macos-15        # Xcode 16, iOS 18 simulators
+    name: Build for iOS (device target)
+    runs-on: macos-15
 
     steps:
       - name: Checkout
@@ -25,7 +25,8 @@ jobs:
           xcodebuild build \
             -project CalendarApp.xcodeproj \
             -scheme CalendarApp \
-            -destination "generic/platform=iOS Simulator" \
+            -destination "generic/platform=iOS" \
+            -sdk iphoneos \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
@@ -37,7 +38,8 @@ jobs:
           xcodebuild analyze \
             -project CalendarApp.xcodeproj \
             -scheme CalendarApp \
-            -destination "generic/platform=iOS Simulator" \
+            -destination "generic/platform=iOS" \
+            -sdk iphoneos \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
