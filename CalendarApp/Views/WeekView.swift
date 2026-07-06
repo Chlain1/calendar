@@ -276,7 +276,7 @@ struct WeekView: View {
     }
 
     private func currentTimeLine(at now: Date) -> some View {
-        let cal = Calendar.current
+        let cal = Calendar.autoupdatingCurrent
         let hour = cal.component(.hour, from: now)
         let minute = cal.component(.minute, from: now)
         let y = CGFloat(hour) * hourHeight + CGFloat(minute) / 60 * hourHeight
@@ -317,7 +317,7 @@ struct WeekView: View {
     }
 
     private func scrollToCurrentTime(proxy: ScrollViewProxy? = nil) {
-        let hour = max(Calendar.current.component(.hour, from: Date()) - 1, 0)
+        let hour = max(Calendar.autoupdatingCurrent.component(.hour, from: Date()) - 1, 0)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
             withAnimation(.easeInOut(duration: 0.3)) {
                 (proxy ?? scrollProxy)?.scrollTo("hour_\(hour)", anchor: .top)
