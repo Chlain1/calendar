@@ -24,6 +24,7 @@
 		CA1E4DA4000000000000020F /* Color+Hex.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA1E4DA4000000000000010F; };
 		CA1E4DA40000000000000210 /* Keychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA1E4DA40000000000000110; };
 		CA1E4DA40000000000000211 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = CA1E4DA40000000000000111; };
+		CA1E4DA40000000000000212 /* EventKitManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA1E4DA40000000000000116; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -46,6 +47,7 @@
 		CA1E4DA40000000000000111 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		CA1E4DA40000000000000112 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		CA1E4DA40000000000000113 /* CalendarApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CalendarApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		CA1E4DA40000000000000116 /* EventKitManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventKitManager.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -82,6 +84,7 @@
 				CA1E4DA40000000000000102 /* ContentView.swift */,
 				CA1E4DA40000000000000011 /* Models */,
 				CA1E4DA40000000000000012 /* CalDAV */,
+				CA1E4DA40000000000000016 /* EventKit */,
 				CA1E4DA40000000000000013 /* Views */,
 				CA1E4DA40000000000000014 /* ViewModels */,
 				CA1E4DA40000000000000015 /* Utilities */,
@@ -110,6 +113,14 @@
 				CA1E4DA40000000000000109 /* SyncManager.swift */,
 			);
 			path = CalDAV;
+			sourceTree = "<group>";
+		};
+		CA1E4DA40000000000000016 /* EventKit */ = {
+			isa = PBXGroup;
+			children = (
+				CA1E4DA40000000000000116 /* EventKitManager.swift */,
+			);
+			path = EventKit;
 			sourceTree = "<group>";
 		};
 		CA1E4DA40000000000000013 /* Views */ = {
@@ -225,6 +236,7 @@
 				CA1E4DA4000000000000020E /* CalendarViewModel.swift in Sources */,
 				CA1E4DA4000000000000020F /* Color+Hex.swift in Sources */,
 				CA1E4DA40000000000000210 /* Keychain.swift in Sources */,
+				CA1E4DA40000000000000212 /* EventKitManager.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

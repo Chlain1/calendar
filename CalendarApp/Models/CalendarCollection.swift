@@ -11,6 +11,8 @@ final class CalendarCollection {
     var colorHex: String?
     var isEnabled: Bool
     var accountID: UUID
+    var eventKitIdentifier: String?
+    var allowsModification: Bool
 
     init(href: String, displayName: String, accountID: UUID, colorHex: String? = nil) {
         self.id = UUID()
@@ -19,9 +21,11 @@ final class CalendarCollection {
         self.colorHex = colorHex
         self.isEnabled = true
         self.accountID = accountID
+        self.allowsModification = true
     }
 
     var color: Color { Color(hex: colorHex ?? "#4A90D9") ?? .blue }
+    var isFromEventKit: Bool { eventKitIdentifier != nil }
 }
 
 extension CalendarCollection: Identifiable {}

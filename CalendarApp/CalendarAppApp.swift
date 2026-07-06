@@ -8,6 +8,7 @@ struct CalendarAppApp: App {
 
     let container: ModelContainer
     let syncManager: SyncManager
+    let eventKitManager: EventKitManager
 
     init() {
         do {
@@ -16,16 +17,21 @@ struct CalendarAppApp: App {
             fatalError("ModelContainer init failed: \(error)")
         }
         syncManager = SyncManager(modelContext: container.mainContext)
+        eventKitManager = EventKitManager(modelContext: container.mainContext)
     }
 
     var body: some Scene {
         WindowGroup {
             ContentView()
-                .task { await syncManager.syncAll() }
+                .task {
+                    await syncManager.syncAll()
+                    await eventKitManager.sync()
+                }
                 .onAppear { registerBackgroundSync() }
         }
         .modelContainer(container)
         .environment(syncManager)
+        .environment(eventKitManager)
     }
 
     private func registerBackgroundSync() {
@@ -35,6 +41,7 @@ struct CalendarAppApp: App {
         ) { task in
             Task { @MainActor in
                 await self.syncManager.syncAll()
+                await self.eventKitManager.sync()
                 task.setTaskCompleted(success: true)
             }
             self.scheduleBackgroundSync()

@@ -34,6 +34,8 @@
         <key>NSAllowsLocalNetworking</key>
         <true/>
     </dict>
+    <key>NSCalendarsFullAccessUsageDescription</key>
+    <string>Calendar needs access to your calendars to show and sync events from the Apple Calendar app.</string>
     <key>UILaunchScreen</key>
     <dict/>
 </dict>

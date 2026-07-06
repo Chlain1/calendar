@@ -25,7 +25,7 @@ final class SyncManager {
 
         do {
             let accounts = try modelContext.fetch(FetchDescriptor<CalendarAccount>())
-            for account in accounts where account.isEnabled {
+            for account in accounts where account.isEnabled && !account.isEventKitAccount {
                 try await syncAccount(account)
             }
             lastSyncDate = Date()

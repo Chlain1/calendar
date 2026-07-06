@@ -10,6 +10,7 @@ final class CalendarAccount {
     var principalURL: String?
     var calendarHomeSetURL: String?
     var isEnabled: Bool
+    var isEventKitAccount: Bool
 
     @Relationship(deleteRule: .cascade)
     var collections: [CalendarCollection]
@@ -20,6 +21,7 @@ final class CalendarAccount {
         self.serverURL = serverURL
         self.username = username
         self.isEnabled = true
+        self.isEventKitAccount = false
         self.collections = []
     }
 }

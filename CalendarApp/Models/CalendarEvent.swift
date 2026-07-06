@@ -16,6 +16,7 @@ final class CalendarEvent {
     var href: String?
     var calendarHref: String?
     var colorHex: String?
+    var eventKitIdentifier: String?
     var isDirty: Bool
     var isDeleted: Bool
     var createdAt: Date
@@ -45,6 +46,7 @@ final class CalendarEvent {
 
     var duration: TimeInterval { endDate.timeIntervalSince(startDate) }
     var color: Color { Color(hex: colorHex ?? "#4A90D9") ?? .blue }
+    var isFromEventKit: Bool { eventKitIdentifier != nil }
 }
 
 extension CalendarEvent: Identifiable {}

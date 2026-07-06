@@ -1,17 +1,30 @@
 import SwiftUI
 import SwiftData
+import EventKit
+import UIKit
 
 struct SettingsView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var accounts: [CalendarAccount]
     @Environment(SyncManager.self) private var syncManager
+    @Environment(EventKitManager.self) private var eventKitManager
     @State private var showingAddAccount = false
+
+    private var calDAVAccounts: [CalendarAccount] {
+        accounts.filter { !$0.isEventKitAccount }
+    }
+
+    private var appleCalendarAccount: CalendarAccount? {
+        accounts.first { $0.isEventKitAccount }
+    }
 
     var body: some View {
         NavigationStack {
             List {
+                appleCalendarSection
+
                 Section("CalDAV Accounts") {
-                    ForEach(accounts) { account in
+                    ForEach(calDAVAccounts) { account in
                         NavigationLink(destination: AccountDetailView(account: account)) {
                             HStack {
                                 VStack(alignment: .leading, spacing: 3) {
@@ -65,7 +78,10 @@ struct SettingsView: View {
                     }
 
                     Button("Sync Now") {
-                        Task { await syncManager.syncAll() }
+                        Task {
+                            await syncManager.syncAll()
+                            await eventKitManager.sync()
+                        }
                     }
                     .disabled(syncManager.isSyncing)
                 }
@@ -83,7 +99,7 @@ struct SettingsView: View {
 
     private func deleteAccounts(at offsets: IndexSet) {
         for index in offsets {
-            let account = accounts[index]
+            let account = calDAVAccounts[index]
             Keychain.delete(account: account.username + "@" + account.serverURL)
             modelContext.delete(account)
         }
@@ -98,6 +114,77 @@ struct SettingsView: View {
         let fmt = RelativeDateTimeFormatter()
         fmt.unitsStyle = .abbreviated
         return fmt.localizedString(for: date, relativeTo: Date())
+    }
+
+    // MARK: - Apple Calendar
+
+    @ViewBuilder
+    private var appleCalendarSection: some View {
+        Section("Apple Calendar") {
+            switch eventKitManager.authorizationStatus {
+            case .fullAccess:
+                HStack {
+                    Text("Status")
+                    Spacer()
+                    if eventKitManager.isSyncing {
+                        HStack(spacing: 6) {
+                            ProgressView().scaleEffect(0.8)
+                            Text("Syncing…").foregroundStyle(.secondary)
+                        }
+                    } else if let date = eventKitManager.lastSyncDate {
+                        Text(relativeDate(date)).foregroundStyle(.secondary)
+                    } else {
+                        Text("Never").foregroundStyle(.secondary)
+                    }
+                }
+
+                if let account = appleCalendarAccount, !account.collections.isEmpty {
+                    NavigationLink("Manage Calendars", destination: AccountDetailView(account: account))
+                } else {
+                    Text("No calendars found").foregroundStyle(.secondary)
+                }
+
+                if let error = eventKitManager.lastError {
+                    HStack(spacing: 8) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+                        Text(error)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                Button("Sync Now") {
+                    Task { await eventKitManager.sync() }
+                }
+                .disabled(eventKitManager.isSyncing)
+
+            case .denied, .restricted:
+                Label("Access denied", systemImage: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+                Button("Open Settings") {
+                    if let url = URL(string: UIApplication.openSettingsURLString) {
+                        UIApplication.shared.open(url)
+                    }
+                }
+
+            case .notDetermined, .writeOnly:
+                Button(action: connectAppleCalendar) {
+                    Label("Connect Apple Calendar", systemImage: "calendar.badge.plus")
+                }
+
+            @unknown default:
+                EmptyView()
+            }
+        }
+    }
+
+    private func connectAppleCalendar() {
+        Task {
+            if await eventKitManager.requestAccess() {
+                await eventKitManager.sync()
+            }
+        }
     }
 }
 

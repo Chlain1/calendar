@@ -42,11 +42,19 @@ struct EventDetailView: View {
                     }
                 }
 
-                Section {
-                    Button(role: .destructive) {
-                        showingDeleteConfirm = true
-                    } label: {
-                        Label("Delete Event", systemImage: "trash")
+                if event.isFromEventKit {
+                    Section {
+                        Label("Managed by the Apple Calendar app — edit or delete it there.", systemImage: "lock")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                } else {
+                    Section {
+                        Button(role: .destructive) {
+                            showingDeleteConfirm = true
+                        } label: {
+                            Label("Delete Event", systemImage: "trash")
+                        }
                     }
                 }
             }
@@ -56,8 +64,10 @@ struct EventDetailView: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Close") { dismiss() }
                 }
-                ToolbarItem(placement: .primaryAction) {
-                    Button("Edit") { showingEdit = true }
+                if !event.isFromEventKit {
+                    ToolbarItem(placement: .primaryAction) {
+                        Button("Edit") { showingEdit = true }
+                    }
                 }
             }
             .sheet(isPresented: $showingEdit) {
