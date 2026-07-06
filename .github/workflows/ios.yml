@@ -9,7 +9,7 @@ on:
 
 jobs:
   build:
-    name: Build for iOS (device target)
+    name: Build IPA
     runs-on: macos-15
 
     steps:
@@ -19,31 +19,68 @@ jobs:
       - name: Xcode version
         run: xcodebuild -version
 
-      - name: Build
+      # ── Signing setup (only runs when secrets are present) ──────────────
+      - name: Import certificate
+        if: ${{ env.CERTIFICATE_P12 != '' }}
+        env:
+          CERTIFICATE_P12: ${{ secrets.CERTIFICATE_P12 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.CERTIFICATE_PASSWORD }}
+        run: |
+          echo "$CERTIFICATE_P12" | base64 --decode > /tmp/cert.p12
+          security create-keychain -p "" build.keychain
+          security import /tmp/cert.p12 -k build.keychain \
+            -P "$CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security list-keychains -s build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "" build.keychain
+          security set-keychain-settings build.keychain
+          security set-key-partition-list -S apple-tool:,apple: -s \
+            -k "" build.keychain
+          rm /tmp/cert.p12
+
+      - name: Install provisioning profile
+        if: ${{ env.PROVISIONING_PROFILE != '' }}
+        env:
+          PROVISIONING_PROFILE: ${{ secrets.PROVISIONING_PROFILE }}
+        run: |
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          echo "$PROVISIONING_PROFILE" | base64 --decode \
+            > ~/Library/MobileDevice/Provisioning\ Profiles/CalendarApp.mobileprovision
+
+      # ── Archive ─────────────────────────────────────────────────────────
+      - name: Archive
         run: |
           set -o pipefail
-          xcodebuild build \
+          xcodebuild archive \
             -project CalendarApp.xcodeproj \
             -scheme CalendarApp \
-            -destination "generic/platform=iOS" \
             -sdk iphoneos \
+            -destination "generic/platform=iOS" \
+            -archivePath "$RUNNER_TEMP/CalendarApp.xcarchive" \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
+            ENABLE_PREVIEWS=NO \
             2>&1 | tee /tmp/xcodebuild.log
 
-      - name: Analyze (static analysis)
+      # ── Package IPA ──────────────────────────────────────────────────────
+      - name: Package IPA
         run: |
-          set -o pipefail
-          xcodebuild analyze \
-            -project CalendarApp.xcodeproj \
-            -scheme CalendarApp \
-            -destination "generic/platform=iOS" \
-            -sdk iphoneos \
-            CODE_SIGN_IDENTITY="" \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO \
-            2>&1 | grep -E "error:|warning:|note:|Build succeeded|FAILED" || true
+          mkdir -p "$RUNNER_TEMP/Payload"
+          cp -r \
+            "$RUNNER_TEMP/CalendarApp.xcarchive/Products/Applications/CalendarApp.app" \
+            "$RUNNER_TEMP/Payload/"
+          cd "$RUNNER_TEMP"
+          zip -r CalendarApp.ipa Payload/
+          echo "IPA size: $(du -sh CalendarApp.ipa | cut -f1)"
+
+      # ── Upload artifact ──────────────────────────────────────────────────
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: CalendarApp-${{ github.sha }}
+          path: ${{ runner.temp }}/CalendarApp.ipa
+          retention-days: 30
 
       - name: Upload build log on failure
         if: failure()
