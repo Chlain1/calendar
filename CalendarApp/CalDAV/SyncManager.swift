@@ -76,7 +76,6 @@ final class SyncManager {
     // MARK: - Collection management
 
     private func updateCollections(account: CalendarAccount, serverCals: [CalDAVCalendar]) {
-        let existingHrefs = Set(account.collections.map(\.href))
         let serverHrefs = Set(serverCals.map(\.href))
 
         // Remove deleted
@@ -90,7 +89,7 @@ final class SyncManager {
             } else {
                 let col = CalendarCollection(href: cal.href, displayName: cal.displayName, accountID: account.id, colorHex: cal.colorHex)
                 account.collections.append(col)
-                try? modelContext.insert(col)
+                modelContext.insert(col)
             }
         }
     }

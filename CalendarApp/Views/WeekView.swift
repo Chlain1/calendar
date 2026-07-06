@@ -114,7 +114,7 @@ struct WeekView: View {
                 if !viewModel.isCurrentWeek {
                     Button("Today") { viewModel.goToToday() }
                         .font(.subheadline)
-                        .foregroundStyle(.accent)
+                        .foregroundStyle(.tint)
                 }
             }
             .padding(.trailing, 16)
