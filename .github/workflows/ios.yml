@@ -19,22 +19,17 @@ jobs:
       - name: Xcode version
         run: xcodebuild -version
 
-      - name: List available iOS simulators
-        run: |
-          xcrun simctl list devices available | grep -E "^-- |iPhone"
-
       - name: Build
         run: |
           set -o pipefail
           xcodebuild build \
             -project CalendarApp.xcodeproj \
             -scheme CalendarApp \
-            -destination "platform=iOS Simulator,name=iPhone 16,OS=latest" \
+            -destination "generic/platform=iOS Simulator" \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
             2>&1 | tee /tmp/xcodebuild.log
-          echo "Exit code: $?"
 
       - name: Analyze (static analysis)
         run: |
@@ -42,7 +37,7 @@ jobs:
           xcodebuild analyze \
             -project CalendarApp.xcodeproj \
             -scheme CalendarApp \
-            -destination "platform=iOS Simulator,name=iPhone 16,OS=latest" \
+            -destination "generic/platform=iOS Simulator" \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
