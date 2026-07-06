@@ -23,7 +23,7 @@ final class EventKitManager {
 
     private let eventStore = EKEventStore()
     private let modelContext: ModelContext
-    private var changeObserver: NSObjectProtocol?
+    private nonisolated(unsafe) var changeObserver: NSObjectProtocol?
 
     init(modelContext: ModelContext) {
         self.modelContext = modelContext
