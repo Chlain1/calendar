@@ -99,6 +99,15 @@ struct WeekView: View {
 
             Spacer()
 
+            if syncManager.isSyncing {
+                ProgressView().scaleEffect(0.8)
+            }
+            if !viewModel.isCurrentWeek {
+                Button("Today") { viewModel.goToToday() }
+                    .font(.subheadline)
+                    .foregroundStyle(.tint)
+            }
+
             Button(action: { viewModel.goToNextWeek() }) {
                 Image(systemName: "chevron.right")
                     .font(.system(size: 17, weight: .semibold))
@@ -106,26 +115,13 @@ struct WeekView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
-        .overlay(alignment: .trailing) {
-            HStack {
-                if syncManager.isSyncing {
-                    ProgressView().scaleEffect(0.8)
-                }
-                if !viewModel.isCurrentWeek {
-                    Button("Today") { viewModel.goToToday() }
-                        .font(.subheadline)
-                        .foregroundStyle(.tint)
-                }
-            }
-            .padding(.trailing, 16)
-        }
     }
 
     // MARK: - Day headers
 
     private var dayHeaderRow: some View {
         HStack(spacing: 0) {
-            Color.clear.frame(width: timeColumnWidth)
+            Color.clear.frame(width: timeColumnWidth, height: 1)
 
             ForEach(viewModel.weekDays, id: \.self) { day in
                 VStack(spacing: 2) {
@@ -274,14 +270,19 @@ struct WeekView: View {
     }
 
     private var currentTimeIndicator: some View {
-        let now = Date()
+        TimelineView(.periodic(from: .now, by: 60)) { context in
+            currentTimeLine(at: context.date)
+        }
+    }
+
+    private func currentTimeLine(at now: Date) -> some View {
         let cal = Calendar.current
         let hour = cal.component(.hour, from: now)
         let minute = cal.component(.minute, from: now)
         let y = CGFloat(hour) * hourHeight + CGFloat(minute) / 60 * hourHeight
 
         // Only show if current week contains today
-        guard viewModel.weekDays.contains(where: { Calendar.current.isDateInToday($0) }) else {
+        guard viewModel.weekDays.contains(where: { cal.isDate($0, inSameDayAs: now) }) else {
             return AnyView(EmptyView())
         }
 
