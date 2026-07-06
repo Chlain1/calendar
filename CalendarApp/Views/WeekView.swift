@@ -154,7 +154,7 @@ struct WeekView: View {
     // MARK: - All-day row
 
     private var allDayRow: some View {
-        HStack(spacing: 0) {
+        HStack(alignment: .top, spacing: 0) {
             Text("All-day")
                 .font(.system(size: 10))
                 .foregroundStyle(.secondary)
@@ -162,7 +162,7 @@ struct WeekView: View {
 
             ForEach(viewModel.weekDays, id: \.self) { day in
                 let dayEvents = viewModel.allDayEvents(for: day, from: allEvents)
-                VStack(spacing: 2) {
+                VStack(alignment: .leading, spacing: 2) {
                     ForEach(dayEvents) { event in
                         Text(event.title)
                             .font(.system(size: 11, weight: .medium))
@@ -173,15 +173,11 @@ struct WeekView: View {
                             .background(event.color.opacity(0.85))
                             .clipShape(RoundedRectangle(cornerRadius: 3))
                     }
-                    if dayEvents.count < 2 {
-                        Spacer()
-                    }
                 }
-                .frame(maxWidth: .infinity, minHeight: allDayRowHeight)
+                .frame(maxWidth: .infinity, minHeight: allDayRowHeight, alignment: .top)
                 .padding(.horizontal, 1)
             }
         }
-        .frame(minHeight: allDayRowHeight)
         .padding(.vertical, 2)
     }
 
