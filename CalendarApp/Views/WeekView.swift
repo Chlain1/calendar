@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import Combine
 
 // MARK: - Layout helpers
 
@@ -50,6 +51,9 @@ struct WeekView: View {
     @Environment(SyncManager.self) private var syncManager
     @State private var viewModel = CalendarViewModel()
     @State private var scrollProxy: ScrollViewProxy?
+    @State private var currentTime = Date()
+
+    private let clockTicker = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
 
     let hourHeight: CGFloat = 60
     let timeColumnWidth: CGFloat = 52
@@ -76,6 +80,9 @@ struct WeekView: View {
                 }
             }
             .toolbar(.hidden, for: .navigationBar)
+            .onReceive(clockTicker) { tick in
+                currentTime = tick
+            }
         }
     }
 
@@ -291,21 +298,22 @@ struct WeekView: View {
     }
 
     private var currentTimeIndicator: some View {
-        TimelineView(.periodic(from: .now, by: 60)) { context in
-            currentTimeLine(at: context.date)
-        }
+        currentTimeLine(at: currentTime)
     }
 
     private func currentTimeLine(at now: Date) -> some View {
         let cal = Calendar.autoupdatingCurrent
-        let hour = cal.component(.hour, from: now)
-        let minute = cal.component(.minute, from: now)
-        let y = CGFloat(hour) * hourHeight + CGFloat(minute) / 60 * hourHeight
 
         // Only show if current week contains today
         guard viewModel.weekDays.contains(where: { cal.isDate($0, inSameDayAs: now) }) else {
             return AnyView(EmptyView())
         }
+
+        // Seconds elapsed since local midnight, rather than extracting .hour/.minute
+        // components separately — a single interval computation that can't
+        // accidentally land on the wrong half of the day.
+        let secondsSinceMidnight = now.timeIntervalSince(cal.startOfDay(for: now))
+        let y = CGFloat(secondsSinceMidnight / 3600) * hourHeight
 
         return AnyView(
             HStack(spacing: 0) {
@@ -338,7 +346,10 @@ struct WeekView: View {
     }
 
     private func scrollToCurrentTime(proxy: ScrollViewProxy? = nil) {
-        let hour = max(Calendar.autoupdatingCurrent.component(.hour, from: Date()) - 1, 0)
+        let now = Date()
+        let cal = Calendar.autoupdatingCurrent
+        let secondsSinceMidnight = now.timeIntervalSince(cal.startOfDay(for: now))
+        let hour = max(Int(secondsSinceMidnight / 3600) - 1, 0)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
             withAnimation(.easeInOut(duration: 0.3)) {
                 (proxy ?? scrollProxy)?.scrollTo("hour_\(hour)", anchor: .top)
