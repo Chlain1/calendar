@@ -176,8 +176,15 @@ struct WeekView: View {
         utcFormatter.timeZone = TimeZone(identifier: "UTC")
         let utcString = utcFormatter.string(from: now)
 
+        let rawNowString = { () -> String in
+            let f = ISO8601DateFormatter()
+            f.timeZone = tz
+            return f.string(from: Date())
+        }()
+
         return VStack(alignment: .leading, spacing: 1) {
-            Text("DEBUG now(local)=\(localString)")
+            Text("DEBUG raw Date()=\(rawNowString)")
+            Text("DEBUG currentTime(state)=\(localString)")
             Text("DEBUG now(UTC)=\(utcString)")
             Text("DEBUG tz=\(tz.identifier) offset=\(tz.secondsFromGMT() / 3600)h")
             Text("DEBUG computed=\(computedHour):\(String(format: "%02d", computedMinute))")
@@ -358,6 +365,9 @@ struct WeekView: View {
         let secondsSinceMidnight = now.timeIntervalSince(cal.startOfDay(for: now))
         let y = CGFloat(secondsSinceMidnight / 3600) * hourHeight
 
+        let debugHour = Int(secondsSinceMidnight / 3600)
+        let debugMinute = Int(secondsSinceMidnight.truncatingRemainder(dividingBy: 3600) / 60)
+
         return AnyView(
             HStack(spacing: 0) {
                 Color.clear.frame(width: timeColumnWidth)
@@ -365,6 +375,12 @@ struct WeekView: View {
                     .fill(Color.red)
                     .frame(maxWidth: .infinity)
                     .frame(height: 2)
+                    .overlay(alignment: .leading) {
+                        Text("LINE y=\(Int(y)) h=\(debugHour):\(String(format: "%02d", debugMinute))")
+                            .font(.system(size: 9, design: .monospaced))
+                            .foregroundStyle(.orange)
+                            .offset(y: -10)
+                    }
             }
             .offset(y: y - 1)
         )
