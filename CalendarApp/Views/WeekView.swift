@@ -383,6 +383,7 @@ struct WeekView: View {
                     }
             }
             .offset(y: y - 1)
+            .animation(nil, value: y)
         )
     }
 
