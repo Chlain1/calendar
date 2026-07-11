@@ -65,6 +65,7 @@ struct WeekView: View {
                 Divider()
                 timeGrid
             }
+            .simultaneousGesture(weekSwipeGesture)
             .navigationBarHidden(true)
             .sheet(isPresented: $viewModel.showingAddEvent) {
                 AddEditEventView(startDate: viewModel.newEventStartDate, modelContext: modelContext)
@@ -76,6 +77,26 @@ struct WeekView: View {
             }
             .toolbar(.hidden, for: .navigationBar)
         }
+    }
+
+    // MARK: - Swipe navigation
+
+    private var weekSwipeGesture: some Gesture {
+        DragGesture(minimumDistance: 24, coordinateSpace: .local)
+            .onEnded { value in
+                let horizontal = value.translation.width
+                let vertical = value.translation.height
+                // Only treat clearly horizontal swipes as week navigation,
+                // so vertical scrolling in the time grid keeps working.
+                guard abs(horizontal) > abs(vertical) * 1.5, abs(horizontal) > 50 else { return }
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    if horizontal < 0 {
+                        viewModel.goToNextWeek()
+                    } else {
+                        viewModel.goToPreviousWeek()
+                    }
+                }
+            }
     }
 
     // MARK: - Header
