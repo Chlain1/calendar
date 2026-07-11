@@ -133,42 +133,27 @@ struct WeekView: View {
         GeometryReader { geo in
             let pageWidth = geo.size.width
             let dayColumnWidth = (pageWidth - timeColumnWidth) / 7
+            // Keyed by each page's week start (not its slot position), so when
+            // the current week shifts, the two pages that keep showing the same
+            // week (e.g. the old "next" page becoming the new "current" one) are
+            // recognized as unchanged and reused instead of rebuilt — only the
+            // one genuinely new week has to be rendered.
+            let pageStarts = [viewModel.previousWeekStart, viewModel.currentWeekStart, viewModel.nextWeekStart]
+
             HStack(spacing: 0) {
-                WeekPageView(
-                    days: viewModel.weekDays(from: viewModel.previousWeekStart),
-                    dayColumnWidth: dayColumnWidth,
-                    events: allEvents,
-                    viewModel: viewModel,
-                    hourHeight: hourHeight,
-                    timeColumnWidth: timeColumnWidth,
-                    allDayRowHeight: allDayRowHeight
-                )
-                .equatable()
-                .frame(width: pageWidth, height: geo.size.height)
-
-                WeekPageView(
-                    days: viewModel.weekDays,
-                    dayColumnWidth: dayColumnWidth,
-                    events: allEvents,
-                    viewModel: viewModel,
-                    hourHeight: hourHeight,
-                    timeColumnWidth: timeColumnWidth,
-                    allDayRowHeight: allDayRowHeight
-                )
-                .equatable()
-                .frame(width: pageWidth, height: geo.size.height)
-
-                WeekPageView(
-                    days: viewModel.weekDays(from: viewModel.nextWeekStart),
-                    dayColumnWidth: dayColumnWidth,
-                    events: allEvents,
-                    viewModel: viewModel,
-                    hourHeight: hourHeight,
-                    timeColumnWidth: timeColumnWidth,
-                    allDayRowHeight: allDayRowHeight
-                )
-                .equatable()
-                .frame(width: pageWidth, height: geo.size.height)
+                ForEach(pageStarts, id: \.self) { weekStart in
+                    WeekPageView(
+                        days: viewModel.weekDays(from: weekStart),
+                        dayColumnWidth: dayColumnWidth,
+                        events: allEvents,
+                        viewModel: viewModel,
+                        hourHeight: hourHeight,
+                        timeColumnWidth: timeColumnWidth,
+                        allDayRowHeight: allDayRowHeight
+                    )
+                    .equatable()
+                    .frame(width: pageWidth, height: geo.size.height)
+                }
             }
             .offset(x: -pageWidth + dragTranslation)
             .frame(width: pageWidth, height: geo.size.height, alignment: .leading)
