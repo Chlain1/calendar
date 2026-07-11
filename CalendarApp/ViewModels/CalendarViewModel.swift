@@ -23,21 +23,9 @@ final class CalendarViewModel {
     // MARK: - Week navigation
 
     var weekDays: [Date] {
-        weekDays(from: currentWeekStart)
-    }
-
-    func weekDays(from weekStart: Date) -> [Date] {
         (0..<7).map { offset in
-            calendar.date(byAdding: .day, value: offset, to: weekStart)!
+            calendar.date(byAdding: .day, value: offset, to: currentWeekStart)!
         }
-    }
-
-    var previousWeekStart: Date {
-        calendar.date(byAdding: .weekOfYear, value: -1, to: currentWeekStart)!
-    }
-
-    var nextWeekStart: Date {
-        calendar.date(byAdding: .weekOfYear, value: 1, to: currentWeekStart)!
     }
 
     private static let weekTitleFormatter: DateFormatter = {
