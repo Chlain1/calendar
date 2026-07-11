@@ -127,12 +127,13 @@ struct WeekView: View {
     private var weekPager: some View {
         GeometryReader { geo in
             let pageWidth = geo.size.width
+            let dayColumnWidth = (pageWidth - timeColumnWidth) / 7
             HStack(spacing: 0) {
-                weekPageContent(days: viewModel.weekDays(from: viewModel.previousWeekStart))
+                weekPageContent(days: viewModel.weekDays(from: viewModel.previousWeekStart), dayColumnWidth: dayColumnWidth)
                     .frame(width: pageWidth, height: geo.size.height)
-                weekPageContent(days: viewModel.weekDays)
+                weekPageContent(days: viewModel.weekDays, dayColumnWidth: dayColumnWidth)
                     .frame(width: pageWidth, height: geo.size.height)
-                weekPageContent(days: viewModel.weekDays(from: viewModel.nextWeekStart))
+                weekPageContent(days: viewModel.weekDays(from: viewModel.nextWeekStart), dayColumnWidth: dayColumnWidth)
                     .frame(width: pageWidth, height: geo.size.height)
             }
             .offset(x: -pageWidth + dragTranslation)
@@ -194,12 +195,12 @@ struct WeekView: View {
         }
     }
 
-    private func weekPageContent(days: [Date]) -> some View {
+    private func weekPageContent(days: [Date], dayColumnWidth: CGFloat) -> some View {
         VStack(spacing: 0) {
             dayHeaderRow(days: days)
             allDayRow(days: days)
             Divider()
-            timeGrid(days: days)
+            timeGrid(days: days, dayColumnWidth: dayColumnWidth)
         }
     }
 
@@ -265,7 +266,7 @@ struct WeekView: View {
 
     // MARK: - Time grid
 
-    private func timeGrid(days: [Date]) -> some View {
+    private func timeGrid(days: [Date], dayColumnWidth: CGFloat) -> some View {
         ScrollViewReader { proxy in
             ScrollView(.vertical, showsIndicators: false) {
                 ZStack(alignment: .topLeading) {
@@ -276,7 +277,7 @@ struct WeekView: View {
                     HStack(spacing: 0) {
                         Color.clear.frame(width: timeColumnWidth)
                         ForEach(days, id: \.self) { day in
-                            dayEventsColumn(for: day)
+                            dayEventsColumn(for: day, width: dayColumnWidth)
                         }
                     }
 
@@ -314,44 +315,40 @@ struct WeekView: View {
         }
     }
 
-    private func dayEventsColumn(for date: Date) -> some View {
+    private func dayEventsColumn(for date: Date, width colWidth: CGFloat) -> some View {
         let dayEvents = viewModel.events(for: date, from: allEvents)
         let layouts = layoutEvents(dayEvents)
 
-        return GeometryReader { geo in
-            let colWidth = geo.size.width
-            ZStack(alignment: .topLeading) {
-                // Tap zones per hour
-                VStack(spacing: 0) {
-                    ForEach(0..<24, id: \.self) { hour in
-                        Color.clear
-                            .frame(maxWidth: .infinity)
-                            .frame(height: hourHeight)
-                            .contentShape(Rectangle())
-                            .onTapGesture {
-                                viewModel.tapOnTimeSlot(date: date, hour: hour)
-                            }
-                    }
-                }
-
-                // Event blocks
-                ForEach(layouts) { layout in
-                    let event = layout.event
-                    let top = yOffset(for: event.startDate)
-                    let height = max(eventHeight(for: event), 22)
-                    let width = colWidth / CGFloat(layout.totalColumns)
-                    let xOff = width * CGFloat(layout.column)
-
-                    EventBlockView(event: event) {
-                        viewModel.tapOnEvent(event)
-                    }
-                    .frame(width: width - 2, height: height)
-                    .offset(x: xOff + 1, y: top)
+        return ZStack(alignment: .topLeading) {
+            // Tap zones per hour
+            VStack(spacing: 0) {
+                ForEach(0..<24, id: \.self) { hour in
+                    Color.clear
+                        .frame(maxWidth: .infinity)
+                        .frame(height: hourHeight)
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            viewModel.tapOnTimeSlot(date: date, hour: hour)
+                        }
                 }
             }
+
+            // Event blocks
+            ForEach(layouts) { layout in
+                let event = layout.event
+                let top = yOffset(for: event.startDate)
+                let height = max(eventHeight(for: event), 22)
+                let width = colWidth / CGFloat(layout.totalColumns)
+                let xOff = width * CGFloat(layout.column)
+
+                EventBlockView(event: event) {
+                    viewModel.tapOnEvent(event)
+                }
+                .frame(width: width - 2, height: height)
+                .offset(x: xOff + 1, y: top)
+            }
         }
-        .frame(maxWidth: .infinity)
-        .frame(height: hourHeight * 24)
+        .frame(width: colWidth, height: hourHeight * 24)
     }
 
     private func currentTimeIndicator(days: [Date]) -> some View {
@@ -444,9 +441,13 @@ struct EventBlockView: View {
         .buttonStyle(.plain)
     }
 
-    private var timeRangeLabel: String {
+    private static let timeFormatter: DateFormatter = {
         let fmt = DateFormatter()
         fmt.dateFormat = "HH:mm"
-        return "\(fmt.string(from: event.startDate)) – \(fmt.string(from: event.endDate))"
+        return fmt
+    }()
+
+    private var timeRangeLabel: String {
+        "\(Self.timeFormatter.string(from: event.startDate)) – \(Self.timeFormatter.string(from: event.endDate))"
     }
 }

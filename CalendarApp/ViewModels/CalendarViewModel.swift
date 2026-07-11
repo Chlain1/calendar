@@ -40,12 +40,16 @@ final class CalendarViewModel {
         calendar.date(byAdding: .weekOfYear, value: 1, to: currentWeekStart)!
     }
 
-    var weekTitle: String {
+    private static let weekTitleFormatter: DateFormatter = {
         let fmt = DateFormatter()
         fmt.dateFormat = "MMMM yyyy"
+        return fmt
+    }()
+
+    var weekTitle: String {
         // Use the month that contains most days of the week
         let midWeek = calendar.date(byAdding: .day, value: 3, to: currentWeekStart)!
-        return fmt.string(from: midWeek)
+        return Self.weekTitleFormatter.string(from: midWeek)
     }
 
     var weekNumber: Int {
@@ -116,15 +120,23 @@ final class CalendarViewModel {
         calendar.isDateInToday(date)
     }
 
-    func dayLabel(for date: Date) -> String {
+    private static let dayLabelFormatter: DateFormatter = {
         let fmt = DateFormatter()
         fmt.dateFormat = "EEE"
-        return fmt.string(from: date).uppercased()
+        return fmt
+    }()
+
+    private static let dayNumberFormatter: DateFormatter = {
+        let fmt = DateFormatter()
+        fmt.dateFormat = "d"
+        return fmt
+    }()
+
+    func dayLabel(for date: Date) -> String {
+        Self.dayLabelFormatter.string(from: date).uppercased()
     }
 
     func dayNumber(for date: Date) -> String {
-        let fmt = DateFormatter()
-        fmt.dateFormat = "d"
-        return fmt.string(from: date)
+        Self.dayNumberFormatter.string(from: date)
     }
 }
