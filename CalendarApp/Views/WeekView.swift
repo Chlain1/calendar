@@ -49,6 +49,7 @@ struct WeekView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(filter: #Predicate<CalendarEvent> { !$0.isDeleted }) private var allEvents: [CalendarEvent]
     @Environment(SyncManager.self) private var syncManager
+    @Environment(\.scenePhase) private var scenePhase
     @State private var viewModel = CalendarViewModel()
     @State private var scrollProxy: ScrollViewProxy?
     @State private var currentTime = Date()
@@ -63,6 +64,7 @@ struct WeekView: View {
         NavigationStack {
             VStack(spacing: 0) {
                 weekNavigationHeader
+                debugTimeInfo
                 Divider()
                 dayHeaderRow
                 allDayRow
@@ -82,6 +84,17 @@ struct WeekView: View {
             .toolbar(.hidden, for: .navigationBar)
             .onReceive(clockTicker) { tick in
                 currentTime = tick
+            }
+            .onAppear {
+                currentTime = Date()
+            }
+            .onChange(of: scenePhase) { _, newPhase in
+                // The periodic timer can sit idle while the app is backgrounded
+                // and not catch up for up to a minute after returning — snap
+                // straight to the real time as soon as the app is active again.
+                if newPhase == .active {
+                    currentTime = Date()
+                }
             }
         }
     }
@@ -143,6 +156,36 @@ struct WeekView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
+    }
+
+    // MARK: - Temporary debug info (remove once the red-line time bug is found)
+
+    private var debugTimeInfo: some View {
+        let now = currentTime
+        let cal = Calendar.autoupdatingCurrent
+        let tz = TimeZone.autoupdatingCurrent
+        let secondsSinceMidnight = now.timeIntervalSince(cal.startOfDay(for: now))
+        let computedHour = Int(secondsSinceMidnight / 3600)
+        let computedMinute = Int(secondsSinceMidnight.truncatingRemainder(dividingBy: 3600) / 60)
+
+        let iso = ISO8601DateFormatter()
+        iso.timeZone = tz
+        let localString = iso.string(from: now)
+
+        let utcFormatter = ISO8601DateFormatter()
+        utcFormatter.timeZone = TimeZone(identifier: "UTC")
+        let utcString = utcFormatter.string(from: now)
+
+        return VStack(alignment: .leading, spacing: 1) {
+            Text("DEBUG now(local)=\(localString)")
+            Text("DEBUG now(UTC)=\(utcString)")
+            Text("DEBUG tz=\(tz.identifier) offset=\(tz.secondsFromGMT() / 3600)h")
+            Text("DEBUG computed=\(computedHour):\(String(format: "%02d", computedMinute))")
+        }
+        .font(.system(size: 9, design: .monospaced))
+        .foregroundStyle(.orange)
+        .padding(.horizontal, 16)
+        .padding(.bottom, 4)
     }
 
     // MARK: - Day headers
