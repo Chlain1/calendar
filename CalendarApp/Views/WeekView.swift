@@ -124,17 +124,51 @@ struct WeekView: View {
     /// Lays out the previous, current and next week side by side and drags them
     /// together with the finger, snapping to the nearest week on release —
     /// mirroring the interactive paging feel of Apple's Calendar app.
+    ///
+    /// Each page is an `Equatable` view keyed on its days/events, so while
+    /// `dragTranslation` changes on every touch-move frame, SwiftUI skips
+    /// rebuilding the (expensive, ~500-view) grid content entirely and only
+    /// updates the cheap `.offset` — that's what keeps the drag smooth.
     private var weekPager: some View {
         GeometryReader { geo in
             let pageWidth = geo.size.width
             let dayColumnWidth = (pageWidth - timeColumnWidth) / 7
             HStack(spacing: 0) {
-                weekPageContent(days: viewModel.weekDays(from: viewModel.previousWeekStart), dayColumnWidth: dayColumnWidth)
-                    .frame(width: pageWidth, height: geo.size.height)
-                weekPageContent(days: viewModel.weekDays, dayColumnWidth: dayColumnWidth)
-                    .frame(width: pageWidth, height: geo.size.height)
-                weekPageContent(days: viewModel.weekDays(from: viewModel.nextWeekStart), dayColumnWidth: dayColumnWidth)
-                    .frame(width: pageWidth, height: geo.size.height)
+                WeekPageView(
+                    days: viewModel.weekDays(from: viewModel.previousWeekStart),
+                    dayColumnWidth: dayColumnWidth,
+                    events: allEvents,
+                    viewModel: viewModel,
+                    hourHeight: hourHeight,
+                    timeColumnWidth: timeColumnWidth,
+                    allDayRowHeight: allDayRowHeight
+                )
+                .equatable()
+                .frame(width: pageWidth, height: geo.size.height)
+
+                WeekPageView(
+                    days: viewModel.weekDays,
+                    dayColumnWidth: dayColumnWidth,
+                    events: allEvents,
+                    viewModel: viewModel,
+                    hourHeight: hourHeight,
+                    timeColumnWidth: timeColumnWidth,
+                    allDayRowHeight: allDayRowHeight
+                )
+                .equatable()
+                .frame(width: pageWidth, height: geo.size.height)
+
+                WeekPageView(
+                    days: viewModel.weekDays(from: viewModel.nextWeekStart),
+                    dayColumnWidth: dayColumnWidth,
+                    events: allEvents,
+                    viewModel: viewModel,
+                    hourHeight: hourHeight,
+                    timeColumnWidth: timeColumnWidth,
+                    allDayRowHeight: allDayRowHeight
+                )
+                .equatable()
+                .frame(width: pageWidth, height: geo.size.height)
             }
             .offset(x: -pageWidth + dragTranslation)
             .frame(width: pageWidth, height: geo.size.height, alignment: .leading)
@@ -195,18 +229,42 @@ struct WeekView: View {
         }
     }
 
-    private func weekPageContent(days: [Date], dayColumnWidth: CGFloat) -> some View {
+}
+
+// MARK: - Single week page (isolated so `.equatable()` can skip rebuilding it
+// while the pager's drag offset changes every touch-move frame)
+
+private struct WeekPageView: View, Equatable {
+    let days: [Date]
+    let dayColumnWidth: CGFloat
+    let events: [CalendarEvent]
+    let viewModel: CalendarViewModel
+    let hourHeight: CGFloat
+    let timeColumnWidth: CGFloat
+    let allDayRowHeight: CGFloat
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        guard lhs.days == rhs.days,
+              lhs.dayColumnWidth == rhs.dayColumnWidth,
+              lhs.events.count == rhs.events.count else { return false }
+        for (l, r) in zip(lhs.events, rhs.events) where l.id != r.id || l.modifiedAt != r.modifiedAt {
+            return false
+        }
+        return true
+    }
+
+    var body: some View {
         VStack(spacing: 0) {
-            dayHeaderRow(days: days)
-            allDayRow(days: days)
+            dayHeaderRow
+            allDayRow
             Divider()
-            timeGrid(days: days, dayColumnWidth: dayColumnWidth)
+            timeGrid
         }
     }
 
     // MARK: - Day headers
 
-    private func dayHeaderRow(days: [Date]) -> some View {
+    private var dayHeaderRow: some View {
         HStack(spacing: 0) {
             Color.clear.frame(width: timeColumnWidth, height: 1)
 
@@ -236,7 +294,7 @@ struct WeekView: View {
 
     // MARK: - All-day row
 
-    private func allDayRow(days: [Date]) -> some View {
+    private var allDayRow: some View {
         HStack(alignment: .top, spacing: 0) {
             Text("All-day")
                 .font(.system(size: 10))
@@ -244,7 +302,7 @@ struct WeekView: View {
                 .frame(width: timeColumnWidth)
 
             ForEach(days, id: \.self) { day in
-                let dayEvents = viewModel.allDayEvents(for: day, from: allEvents)
+                let dayEvents = viewModel.allDayEvents(for: day, from: events)
                 VStack(alignment: .leading, spacing: 2) {
                     ForEach(dayEvents) { event in
                         Text(event.title)
@@ -266,7 +324,7 @@ struct WeekView: View {
 
     // MARK: - Time grid
 
-    private func timeGrid(days: [Date], dayColumnWidth: CGFloat) -> some View {
+    private var timeGrid: some View {
         ScrollViewReader { proxy in
             ScrollView(.vertical, showsIndicators: false) {
                 ZStack(alignment: .topLeading) {
@@ -277,12 +335,12 @@ struct WeekView: View {
                     HStack(spacing: 0) {
                         Color.clear.frame(width: timeColumnWidth)
                         ForEach(days, id: \.self) { day in
-                            dayEventsColumn(for: day, width: dayColumnWidth)
+                            dayEventsColumn(for: day)
                         }
                     }
 
                     // Current time indicator
-                    currentTimeIndicator(days: days)
+                    currentTimeIndicator
                 }
                 .frame(height: hourHeight * 24)
                 .id("timeGrid")
@@ -315,8 +373,8 @@ struct WeekView: View {
         }
     }
 
-    private func dayEventsColumn(for date: Date, width colWidth: CGFloat) -> some View {
-        let dayEvents = viewModel.events(for: date, from: allEvents)
+    private func dayEventsColumn(for date: Date) -> some View {
+        let dayEvents = viewModel.events(for: date, from: events)
         let layouts = layoutEvents(dayEvents)
 
         return ZStack(alignment: .topLeading) {
@@ -338,7 +396,7 @@ struct WeekView: View {
                 let event = layout.event
                 let top = yOffset(for: event.startDate)
                 let height = max(eventHeight(for: event), 22)
-                let width = colWidth / CGFloat(layout.totalColumns)
+                let width = dayColumnWidth / CGFloat(layout.totalColumns)
                 let xOff = width * CGFloat(layout.column)
 
                 EventBlockView(event: event) {
@@ -348,16 +406,16 @@ struct WeekView: View {
                 .offset(x: xOff + 1, y: top)
             }
         }
-        .frame(width: colWidth, height: hourHeight * 24)
+        .frame(width: dayColumnWidth, height: hourHeight * 24)
     }
 
-    private func currentTimeIndicator(days: [Date]) -> some View {
+    private var currentTimeIndicator: some View {
         TimelineView(.periodic(from: .now, by: 60)) { context in
-            currentTimeLine(at: context.date, days: days)
+            currentTimeLine(at: context.date)
         }
     }
 
-    private func currentTimeLine(at now: Date, days: [Date]) -> some View {
+    private func currentTimeLine(at now: Date) -> some View {
         let cal = Calendar.autoupdatingCurrent
         let hour = cal.component(.hour, from: now)
         let minute = cal.component(.minute, from: now)
