@@ -49,7 +49,8 @@ struct WeekView: View {
     @Query(filter: #Predicate<CalendarEvent> { !$0.isDeleted }) private var allEvents: [CalendarEvent]
     @Environment(SyncManager.self) private var syncManager
     @State private var viewModel = CalendarViewModel()
-    @State private var scrollProxy: ScrollViewProxy?
+    @State private var dragTranslation: CGFloat = 0
+    @State private var pagerWidth: CGFloat = 390
 
     let hourHeight: CGFloat = 60
     let timeColumnWidth: CGFloat = 52
@@ -60,12 +61,8 @@ struct WeekView: View {
             VStack(spacing: 0) {
                 weekNavigationHeader
                 Divider()
-                dayHeaderRow
-                allDayRow
-                Divider()
-                timeGrid
+                weekPager
             }
-            .simultaneousGesture(weekSwipeGesture)
             .navigationBarHidden(true)
             .sheet(isPresented: $viewModel.showingAddEvent) {
                 AddEditEventView(startDate: viewModel.newEventStartDate, modelContext: modelContext)
@@ -79,31 +76,11 @@ struct WeekView: View {
         }
     }
 
-    // MARK: - Swipe navigation
-
-    private var weekSwipeGesture: some Gesture {
-        DragGesture(minimumDistance: 24, coordinateSpace: .local)
-            .onEnded { value in
-                let horizontal = value.translation.width
-                let vertical = value.translation.height
-                // Only treat clearly horizontal swipes as week navigation,
-                // so vertical scrolling in the time grid keeps working.
-                guard abs(horizontal) > abs(vertical) * 1.5, abs(horizontal) > 50 else { return }
-                withAnimation(.easeInOut(duration: 0.25)) {
-                    if horizontal < 0 {
-                        viewModel.goToNextWeek()
-                    } else {
-                        viewModel.goToPreviousWeek()
-                    }
-                }
-            }
-    }
-
     // MARK: - Header
 
     private var weekNavigationHeader: some View {
         HStack {
-            Button(action: { viewModel.goToPreviousWeek() }) {
+            Button(action: { commitSwipe(next: false) }) {
                 Image(systemName: "chevron.left")
                     .font(.system(size: 17, weight: .semibold))
             }
@@ -124,12 +101,16 @@ struct WeekView: View {
                 ProgressView().scaleEffect(0.8)
             }
             if !viewModel.isCurrentWeek {
-                Button("Today") { viewModel.goToToday() }
-                    .font(.subheadline)
-                    .foregroundStyle(.tint)
+                Button("Today") {
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        viewModel.goToToday()
+                    }
+                }
+                .font(.subheadline)
+                .foregroundStyle(.tint)
             }
 
-            Button(action: { viewModel.goToNextWeek() }) {
+            Button(action: { commitSwipe(next: true) }) {
                 Image(systemName: "chevron.right")
                     .font(.system(size: 17, weight: .semibold))
             }
@@ -138,13 +119,97 @@ struct WeekView: View {
         .padding(.vertical, 10)
     }
 
+    // MARK: - Week pager (swipe navigation)
+
+    /// Lays out the previous, current and next week side by side and drags them
+    /// together with the finger, snapping to the nearest week on release —
+    /// mirroring the interactive paging feel of Apple's Calendar app.
+    private var weekPager: some View {
+        GeometryReader { geo in
+            let pageWidth = geo.size.width
+            HStack(spacing: 0) {
+                weekPageContent(days: viewModel.weekDays(from: viewModel.previousWeekStart))
+                    .frame(width: pageWidth, height: geo.size.height)
+                weekPageContent(days: viewModel.weekDays)
+                    .frame(width: pageWidth, height: geo.size.height)
+                weekPageContent(days: viewModel.weekDays(from: viewModel.nextWeekStart))
+                    .frame(width: pageWidth, height: geo.size.height)
+            }
+            .offset(x: -pageWidth + dragTranslation)
+            .frame(width: pageWidth, height: geo.size.height, alignment: .leading)
+            .clipped()
+            .contentShape(Rectangle())
+            .simultaneousGesture(weekSwipeGesture(pageWidth: pageWidth))
+            .onAppear { pagerWidth = pageWidth }
+            .onChange(of: pageWidth) { _, newValue in pagerWidth = newValue }
+        }
+    }
+
+    private func weekSwipeGesture(pageWidth: CGFloat) -> some Gesture {
+        DragGesture(minimumDistance: 12, coordinateSpace: .local)
+            .onChanged { value in
+                // Only follow clearly horizontal drags, so vertical scrolling
+                // in the time grid underneath keeps working normally.
+                guard abs(value.translation.width) > abs(value.translation.height) else { return }
+                dragTranslation = value.translation.width
+            }
+            .onEnded { value in
+                let horizontal = value.translation.width
+                let vertical = value.translation.height
+                guard abs(horizontal) > abs(vertical) * 1.2 else {
+                    cancelSwipe()
+                    return
+                }
+                let threshold = pageWidth * 0.25
+                let flungForward = value.predictedEndTranslation.width < -pageWidth * 0.6
+                let flungBackward = value.predictedEndTranslation.width > pageWidth * 0.6
+
+                if horizontal < 0 && (horizontal < -threshold || flungForward) {
+                    commitSwipe(next: true)
+                } else if horizontal > 0 && (horizontal > threshold || flungBackward) {
+                    commitSwipe(next: false)
+                } else {
+                    cancelSwipe()
+                }
+            }
+    }
+
+    private func commitSwipe(next: Bool) {
+        let target: CGFloat = next ? -pagerWidth : pagerWidth
+        withAnimation(.easeOut(duration: 0.28)) {
+            dragTranslation = target
+        } completion: {
+            if next {
+                viewModel.goToNextWeek()
+            } else {
+                viewModel.goToPreviousWeek()
+            }
+            dragTranslation = 0
+        }
+    }
+
+    private func cancelSwipe() {
+        withAnimation(.interactiveSpring(response: 0.32, dampingFraction: 0.82)) {
+            dragTranslation = 0
+        }
+    }
+
+    private func weekPageContent(days: [Date]) -> some View {
+        VStack(spacing: 0) {
+            dayHeaderRow(days: days)
+            allDayRow(days: days)
+            Divider()
+            timeGrid(days: days)
+        }
+    }
+
     // MARK: - Day headers
 
-    private var dayHeaderRow: some View {
+    private func dayHeaderRow(days: [Date]) -> some View {
         HStack(spacing: 0) {
             Color.clear.frame(width: timeColumnWidth, height: 1)
 
-            ForEach(viewModel.weekDays, id: \.self) { day in
+            ForEach(days, id: \.self) { day in
                 VStack(spacing: 2) {
                     Text(viewModel.dayLabel(for: day))
                         .font(.system(size: 11, weight: .medium))
@@ -170,14 +235,14 @@ struct WeekView: View {
 
     // MARK: - All-day row
 
-    private var allDayRow: some View {
+    private func allDayRow(days: [Date]) -> some View {
         HStack(alignment: .top, spacing: 0) {
             Text("All-day")
                 .font(.system(size: 10))
                 .foregroundStyle(.secondary)
                 .frame(width: timeColumnWidth)
 
-            ForEach(viewModel.weekDays, id: \.self) { day in
+            ForEach(days, id: \.self) { day in
                 let dayEvents = viewModel.allDayEvents(for: day, from: allEvents)
                 VStack(alignment: .leading, spacing: 2) {
                     ForEach(dayEvents) { event in
@@ -200,7 +265,7 @@ struct WeekView: View {
 
     // MARK: - Time grid
 
-    private var timeGrid: some View {
+    private func timeGrid(days: [Date]) -> some View {
         ScrollViewReader { proxy in
             ScrollView(.vertical, showsIndicators: false) {
                 ZStack(alignment: .topLeading) {
@@ -210,19 +275,18 @@ struct WeekView: View {
                     // Events layer
                     HStack(spacing: 0) {
                         Color.clear.frame(width: timeColumnWidth)
-                        ForEach(viewModel.weekDays, id: \.self) { day in
+                        ForEach(days, id: \.self) { day in
                             dayEventsColumn(for: day)
                         }
                     }
 
                     // Current time indicator
-                    currentTimeIndicator
+                    currentTimeIndicator(days: days)
                 }
                 .frame(height: hourHeight * 24)
                 .id("timeGrid")
             }
             .onAppear {
-                scrollProxy = proxy
                 scrollToCurrentTime(proxy: proxy)
             }
         }
@@ -290,20 +354,20 @@ struct WeekView: View {
         .frame(height: hourHeight * 24)
     }
 
-    private var currentTimeIndicator: some View {
+    private func currentTimeIndicator(days: [Date]) -> some View {
         TimelineView(.periodic(from: .now, by: 60)) { context in
-            currentTimeLine(at: context.date)
+            currentTimeLine(at: context.date, days: days)
         }
     }
 
-    private func currentTimeLine(at now: Date) -> some View {
+    private func currentTimeLine(at now: Date, days: [Date]) -> some View {
         let cal = Calendar.autoupdatingCurrent
         let hour = cal.component(.hour, from: now)
         let minute = cal.component(.minute, from: now)
         let y = CGFloat(hour) * hourHeight + CGFloat(minute) / 60 * hourHeight
 
-        // Only show if current week contains today
-        guard viewModel.weekDays.contains(where: { cal.isDate($0, inSameDayAs: now) }) else {
+        // Only show if this page's week contains today
+        guard days.contains(where: { cal.isDate($0, inSameDayAs: now) }) else {
             return AnyView(EmptyView())
         }
 
@@ -337,11 +401,11 @@ struct WeekView: View {
         hour == 0 ? "" : String(format: "%02d:00", hour)
     }
 
-    private func scrollToCurrentTime(proxy: ScrollViewProxy? = nil) {
+    private func scrollToCurrentTime(proxy: ScrollViewProxy) {
         let hour = max(Calendar.autoupdatingCurrent.component(.hour, from: Date()) - 1, 0)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
             withAnimation(.easeInOut(duration: 0.3)) {
-                (proxy ?? scrollProxy)?.scrollTo("hour_\(hour)", anchor: .top)
+                proxy.scrollTo("hour_\(hour)", anchor: .top)
             }
         }
     }
