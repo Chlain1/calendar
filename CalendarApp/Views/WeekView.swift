@@ -274,6 +274,22 @@ struct WeekView: View {
 
                     // Current time indicator
                     currentTimeIndicator
+
+                    // TEMP DEBUG: static marker fixed at hour 2, no time logic at all
+                    HStack(spacing: 0) {
+                        Color.clear.frame(width: timeColumnWidth)
+                        Rectangle()
+                            .fill(Color.blue)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 2)
+                            .overlay(alignment: .leading) {
+                                Text("STATIC hour=2 y=120")
+                                    .font(.system(size: 9, design: .monospaced))
+                                    .foregroundStyle(.cyan)
+                                    .offset(y: -10)
+                            }
+                    }
+                    .offset(y: CGFloat(2) * hourHeight - 1)
                 }
                 .frame(height: hourHeight * 24)
                 .id("timeGrid")
