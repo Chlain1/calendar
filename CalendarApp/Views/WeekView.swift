@@ -64,7 +64,6 @@ struct WeekView: View {
         NavigationStack {
             VStack(spacing: 0) {
                 weekNavigationHeader
-                debugTimeInfo
                 Divider()
                 dayHeaderRow
                 allDayRow
@@ -158,43 +157,6 @@ struct WeekView: View {
         .padding(.vertical, 10)
     }
 
-    // MARK: - Temporary debug info (remove once the red-line time bug is found)
-
-    private var debugTimeInfo: some View {
-        let now = currentTime
-        let cal = Calendar.autoupdatingCurrent
-        let tz = TimeZone.autoupdatingCurrent
-        let secondsSinceMidnight = now.timeIntervalSince(cal.startOfDay(for: now))
-        let computedHour = Int(secondsSinceMidnight / 3600)
-        let computedMinute = Int(secondsSinceMidnight.truncatingRemainder(dividingBy: 3600) / 60)
-
-        let iso = ISO8601DateFormatter()
-        iso.timeZone = tz
-        let localString = iso.string(from: now)
-
-        let utcFormatter = ISO8601DateFormatter()
-        utcFormatter.timeZone = TimeZone(identifier: "UTC")
-        let utcString = utcFormatter.string(from: now)
-
-        let rawNowString = { () -> String in
-            let f = ISO8601DateFormatter()
-            f.timeZone = tz
-            return f.string(from: Date())
-        }()
-
-        return VStack(alignment: .leading, spacing: 1) {
-            Text("DEBUG raw Date()=\(rawNowString)")
-            Text("DEBUG currentTime(state)=\(localString)")
-            Text("DEBUG now(UTC)=\(utcString)")
-            Text("DEBUG tz=\(tz.identifier) offset=\(tz.secondsFromGMT() / 3600)h")
-            Text("DEBUG computed=\(computedHour):\(String(format: "%02d", computedMinute))")
-        }
-        .font(.system(size: 9, design: .monospaced))
-        .foregroundStyle(.orange)
-        .padding(.horizontal, 16)
-        .padding(.bottom, 4)
-    }
-
     // MARK: - Day headers
 
     private var dayHeaderRow: some View {
@@ -274,22 +236,6 @@ struct WeekView: View {
 
                     // Current time indicator
                     currentTimeIndicator
-
-                    // TEMP DEBUG: static marker fixed at hour 2, no time logic at all
-                    HStack(spacing: 0) {
-                        Color.clear.frame(width: timeColumnWidth)
-                        Rectangle()
-                            .fill(Color.blue)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 2)
-                            .overlay(alignment: .leading) {
-                                Text("STATIC hour=2 y=120")
-                                    .font(.system(size: 9, design: .monospaced))
-                                    .foregroundStyle(.cyan)
-                                    .offset(y: -10)
-                            }
-                    }
-                    .offset(y: CGFloat(2) * hourHeight - 1)
                 }
                 .frame(height: hourHeight * 24)
                 .id("timeGrid")
@@ -381,25 +327,21 @@ struct WeekView: View {
         let secondsSinceMidnight = now.timeIntervalSince(cal.startOfDay(for: now))
         let y = CGFloat(secondsSinceMidnight / 3600) * hourHeight
 
-        let debugHour = Int(secondsSinceMidnight / 3600)
-        let debugMinute = Int(secondsSinceMidnight.truncatingRemainder(dividingBy: 3600) / 60)
-
         return AnyView(
             HStack(spacing: 0) {
-                Color.clear.frame(width: timeColumnWidth)
+                // Must have an explicit height: Color is a flexible shape and,
+                // left unconstrained, expands to fill the full 1440pt-tall grid
+                // offered by the ZStack — which then vertically centers the
+                // HStack's content, silently shifting the line down by half the
+                // day (12h). That was the actual cause of the persistent 12h-off
+                // red line, not any timezone/Date issue.
+                Color.clear.frame(width: timeColumnWidth, height: 2)
                 Rectangle()
                     .fill(Color.red)
                     .frame(maxWidth: .infinity)
                     .frame(height: 2)
-                    .overlay(alignment: .leading) {
-                        Text("LINE y=\(Int(y)) h=\(debugHour):\(String(format: "%02d", debugMinute))")
-                            .font(.system(size: 9, design: .monospaced))
-                            .foregroundStyle(.orange)
-                            .offset(y: -10)
-                    }
             }
             .offset(y: y - 1)
-            .animation(nil, value: y)
         )
     }
 
