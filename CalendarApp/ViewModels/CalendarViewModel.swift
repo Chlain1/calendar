@@ -71,8 +71,14 @@ final class CalendarViewModel {
 
     func allDayEvents(for date: Date, from allEvents: [CalendarEvent]) -> [CalendarEvent] {
         allEvents.filter { event in
-            !event.isDeleted && event.isAllDay && calendar.isDate(event.startDate, inSameDayAs: date)
+            !event.isDeleted && event.isAllDay && eventOccurs(on: date, event: event)
         }
+    }
+
+    private func eventOccurs(on date: Date, event: CalendarEvent) -> Bool {
+        let dayStart = calendar.startOfDay(for: date)
+        guard let dayEnd = calendar.date(byAdding: .day, value: 1, to: dayStart) else { return false }
+        return event.startDate < dayEnd && event.endDate > dayStart
     }
 
     func eventsInWeek(_ allEvents: [CalendarEvent]) -> [CalendarEvent] {
