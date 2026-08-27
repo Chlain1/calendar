@@ -36,7 +36,7 @@ struct CalendarAppApp: App {
 
     private func registerBackgroundSync() {
         BGTaskScheduler.shared.register(
-            forTaskWithIdentifier: "chlain.CalendarApp.sync",
+            forTaskWithIdentifier: "eu.chladni.CalendarApp.sync",
             using: nil
         ) { task in
             Task { @MainActor in
@@ -50,7 +50,7 @@ struct CalendarAppApp: App {
     }
 
     private func scheduleBackgroundSync() {
-        let request = BGAppRefreshTaskRequest(identifier: "chlain.CalendarApp.sync")
+        let request = BGAppRefreshTaskRequest(identifier: "eu.chladni.CalendarApp.sync")
         request.earliestBeginDate = Date(timeIntervalSinceNow: 15 * 60)
         try? BGTaskScheduler.shared.submit(request)
     }

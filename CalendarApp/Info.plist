@@ -7,7 +7,7 @@
     <key>CFBundleExecutable</key>
     <string>$(EXECUTABLE_NAME)</string>
     <key>CFBundleIdentifier</key>
-    <string>chlain.CalendarApp</string>
+    <string>eu.chladni.CalendarApp</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>
@@ -27,7 +27,7 @@
     </array>
     <key>BGTaskSchedulerPermittedIdentifiers</key>
     <array>
-        <string>chlain.CalendarApp.sync</string>
+        <string>eu.chladni.CalendarApp.sync</string>
     </array>
     <key>NSAppTransportSecurity</key>
     <dict>
